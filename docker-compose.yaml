@@ -1,0 +1,27 @@
+services:
+  ollama:
+    image: ollama/ollama
+    environment:
+    - OLLAMA_HOST=127.0.0.1:${OLLAMA_PORT}
+    tty: true
+    restart: unless-stopped
+    volumes:
+      - ./ollama/ollama:/root/.ollama
+    networks:
+        - intranet
+  openwebui:
+    image: ghcr.io/open-webui/open-webui
+    environment:
+    - OLLAMA_BASE_URL=http://host.docker.internal:${OLLAMA_PORT}
+    - WEBUI_NAME=${WEBUI_NAME}
+    - WEBUI_URL=http://localhost:${OPENWEBUI_PORT}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
+    volumes:
+      - ./open-webui:/app/backend/data
+    networks:
+      - intranet
+networks:
+  intranet:
+    external: false
