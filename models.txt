@@ -1,0 +1,2 @@
+nomic-embed-text
+hf.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF:Q4_K_M

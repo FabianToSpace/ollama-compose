@@ -1,0 +1,3 @@
+{$SERVER_HOSTNAME} {
+	reverse_proxy openwebui:{$OPENWEBUI_PORT}
+}

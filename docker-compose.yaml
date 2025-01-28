@@ -2,26 +2,79 @@ services:
   ollama:
     image: ollama/ollama
     environment:
-    - OLLAMA_HOST=127.0.0.1:${OLLAMA_PORT}
+      - OLLAMA_HOST=0.0.0.0:${OLLAMA_PORT}
     tty: true
     restart: unless-stopped
     volumes:
       - ./ollama/ollama:/root/.ollama
+      - ./models.txt:/root/models.txt:ro
+      - ./scripts/post_start.sh:/root/post_start.sh
     networks:
         - intranet
+    entrypoint: >
+      sh -c "chmod +x /root/post_start.sh &&
+             /bin/ollama serve &   # Start Ollama server in the background
+             sleep 5 &&            # Allow some time for the server to start
+             /root/post_start.sh &&
+             wait"                 # Keep the container alive after running the script
   openwebui:
     image: ghcr.io/open-webui/open-webui
     environment:
-    - OLLAMA_BASE_URL=http://host.docker.internal:${OLLAMA_PORT}
-    - WEBUI_NAME=${WEBUI_NAME}
-    - WEBUI_URL=http://localhost:${OPENWEBUI_PORT}
-    extra_hosts:
-      - host.docker.internal:host-gateway
+      - OLLAMA_BASE_URL=http://ollama:${OLLAMA_PORT}
+      - RAG_OLLAMA_BASE_URL=http://ollama:${OLLAMA_PORT}
+      - TIKA_SERVER_URL=http://tika:9998
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgvector/${POSTGRES_DB}
+      - CONTENT_EXTRACTION_ENGINE=tika
+      - RAG_EMBEDDING_MODEL=nomic-embed-text
+      - WEBUI_NAME=${WEBUI_NAME}
+      - PORT=${OPENWEBUI_PORT}
+      - VECTOR_DB=pgvector
+      - RAG_EMBEDDING_ENGINE=ollama
+      - ENABLE_RAG_HYBRID_SEARCH=True
     restart: unless-stopped
+    depends_on:
+      - ollama
     volumes:
       - ./open-webui:/app/backend/data
+    networks:
+      - intranet
+  caddy:
+    image: caddy
+    environment:
+      - SERVER_HOSTNAME=${SERVER_HOSTNAME}
+      - OPENWEBUI_PORT=${OPENWEBUI_PORT}
+    ports:
+      - 80:80
+      - 443:443
+    restart: unless-stopped
+    depends_on:
+      - openwebui
+    volumes:
+      - ./data:/data
+      - ./config:/config
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - intranet
+  pgvector:
+    image: pgvector/pgvector:pg17
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGDATA=/data/postgres
+    restart: unless-stopped
+    volumes:
+      - ./postgres:/data/postgres
+    networks:
+      - intranet
+  tika:
+    image: apache/tika:latest-full
+    container_name: tika
+    restart: unless-stopped
     networks:
       - intranet
 networks:
   intranet:
     external: false
+volumes:
+  pgadmin:
